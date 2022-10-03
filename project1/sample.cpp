@@ -830,7 +830,10 @@ InitLists( )
 			// Create SPIRALSEG segments in the spiral
 			for(int i = 0; i < SPIRALSEGS; i++) {
 				// Make the color more pronounces as we go up the spiral
-				glColor3f(0., (float)i / (float)SPIRALSEGS, 0.);
+				float hsv[3] = {i, .75, 1};
+				float rgb[3];
+				HsvRgb( hsv, rgb );
+				glColor3fv(rgb);
 				glVertex3f(3*cos(angle1), 3*sin(angle1), (i / 2) - (SPIRALSEGS / 4));
 				angle1 += .25;
 			}
