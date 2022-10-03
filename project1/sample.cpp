@@ -32,11 +32,11 @@
 //		6. The transformations to be reset
 //		7. The program to quit
 //
-//	Author:			Joe Graphics
+//	Author:			Peter LaMontagne
 
 // title of these windows:
 
-const char *WINDOWTITLE = "OpenGL / GLUT Sample -- Joe Graphics";
+const char *WINDOWTITLE = "Project 1 -- Peter LaMontagne";
 const char *GLUITITLE   = "User Interface Window";
 
 // what the glui package defines as true and false:
@@ -50,11 +50,20 @@ const int ESCAPE = 0x1b;
 
 // initial window size:
 
-const int INIT_WINDOW_SIZE = 600;
+const int INIT_WINDOW_SIZE = 800;
 
 // size of the 3d box to be drawn:
 
 const float BOXSIZE = 2.f;
+
+// Length of the spiral to be drawn
+
+const int SPIRALSEGS = 200;
+
+// Constants for the circles
+
+const int CIRLCESEGS = 100;
+const int CIRCLEDEPTH = 100;
 
 // multiplication factors for input interaction:
 //  (these are known from previous experience)
@@ -100,10 +109,6 @@ enum ButtonVals
 // window background color (rgba):
 
 const GLfloat BACKCOLOR[ ] = { 0., 0., 0., 1. };
-
-// line width for the axes:
-
-const GLfloat AXES_WIDTH   = 3.;
 
 // the color numbers:
 // this order must match the radio button order, which must match the order of the color names,
@@ -174,7 +179,12 @@ int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
 int		DepthFightingOn;		// != 0 means to force the creation of z-fighting
-GLuint	BoxList;				// object display list
+GLuint	CircleList1;			// Circle display lists
+GLuint	CircleList2;
+GLuint	CircleList3;
+GLuint  SpiralList1;			// Spiral object display lists
+GLuint  SpiralList2;
+GLuint  SpiralList3;
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 int		ShadowsOn;				// != 0 means to turn shadows on
@@ -341,7 +351,7 @@ Display( )
 
 	// set the eye position, look-at position, and up-vector:
 
-	gluLookAt( 0.f, 0.f, 3.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
+	gluLookAt( 0.f, -50.f, 3.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
 
 
 	// rotate the scene:
@@ -388,9 +398,17 @@ Display( )
 	glEnable( GL_NORMALIZE );
 
 
-	// draw the box object by calling up its display list:
+	// Draw all three circles
 
-	glCallList( BoxList );
+	glCallList( CircleList1 );
+	glCallList( CircleList2 );
+	glCallList( CircleList3 );
+
+	// Draw all three spirals
+
+	glCallList(SpiralList1);
+	glCallList(SpiralList2);
+	glCallList(SpiralList3);
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
@@ -752,73 +770,98 @@ InitGraphics( )
 void
 InitLists( )
 {
-	float dx = BOXSIZE / 2.f;
-	float dy = BOXSIZE / 2.f;
-	float dz = BOXSIZE / 2.f;
 	glutSetWindow( MainWindow );
 
-	// create the object:
-
-	BoxList = glGenLists( 1 );
-	glNewList( BoxList, GL_COMPILE );
-
-		glBegin( GL_QUADS );
-
-			glColor3f( 1., 0., 0. );
-
-				glNormal3f( 1., 0., 0. );
-					glVertex3f(  dx, -dy,  dz );
-					glVertex3f(  dx, -dy, -dz );
-					glVertex3f(  dx,  dy, -dz );
-					glVertex3f(  dx,  dy,  dz );
-
-				glNormal3f(-1., 0., 0.);
-					glVertex3f( -dx, -dy,  dz);
-					glVertex3f( -dx,  dy,  dz );
-					glVertex3f( -dx,  dy, -dz );
-					glVertex3f( -dx, -dy, -dz );
-
-			glColor3f( 0., 1., 0. );
-
-				glNormal3f(0., 1., 0.);
-					glVertex3f( -dx,  dy,  dz );
-					glVertex3f(  dx,  dy,  dz );
-					glVertex3f(  dx,  dy, -dz );
-					glVertex3f( -dx,  dy, -dz );
-
-				glNormal3f(0., -1., 0.);
-					glVertex3f( -dx, -dy,  dz);
-					glVertex3f( -dx, -dy, -dz );
-					glVertex3f(  dx, -dy, -dz );
-					glVertex3f(  dx, -dy,  dz );
-
-			glColor3f(0., 0., 1.);
-
-				glNormal3f(0., 0., 1.);
-					glVertex3f(-dx, -dy, dz);
-					glVertex3f( dx, -dy, dz);
-					glVertex3f( dx,  dy, dz);
-					glVertex3f(-dx,  dy, dz);
-
-				glNormal3f(0., 0., -1.);
-					glVertex3f(-dx, -dy, -dz);
-					glVertex3f(-dx,  dy, -dz);
-					glVertex3f( dx,  dy, -dz);
-					glVertex3f( dx, -dy, -dz);
-
-		glEnd( );
-
+	// create circle 1
+	CircleList1 = glGenLists( 1 );
+	glNewList( CircleList1, GL_COMPILE );
+		glBegin(GL_LINE_STRIP);
+			// Make circles every 10 units from -CIRCLEDEPTH to CIRCLEDEPTH
+			for(int depth = -CIRCLEDEPTH; depth <= CIRCLEDEPTH; depth += 10) {
+				float ang = 0.;
+				float dang = 2. * M_PI / (float)CIRLCESEGS;
+				// Construct each circle out of CIRCLESEGS lines
+				for(int i = 0; i < CIRLCESEGS; i++) {
+					glColor3f(1., 1., 1.);
+					glVertex3f(10*cos(ang), 10*sin(ang), depth);
+					ang += dang;
+				}
+			}
+		glEnd();
 	glEndList( );
 
-
-	// create the axes:
-
-	AxesList = glGenLists( 1 );
-	glNewList( AxesList, GL_COMPILE );
-		glLineWidth( AXES_WIDTH );
-			Axes( 1.5 );
-		glLineWidth( 1. );
+	// Create circle 2
+	CircleList2 = glGenLists( 1 );
+	glNewList( CircleList2, GL_COMPILE );
+		glBegin(GL_LINE_STRIP);
+			for(int depth = -CIRCLEDEPTH; depth <= CIRCLEDEPTH; depth += 10) {
+				float ang = 0.;
+				float dang = 2. * M_PI / (float)CIRLCESEGS;
+				for(int i = 0; i < CIRLCESEGS; i++) {
+					glColor3f(1., 1., 1.);
+					glVertex3f(10*cos(ang) + 20., 10*sin(ang), depth);
+					ang += dang;
+				}
+			}
+		glEnd();
 	glEndList( );
+
+	// Create cirlce 3
+	CircleList3 = glGenLists( 1 );
+	glNewList( CircleList3, GL_COMPILE );
+		glBegin(GL_LINE_STRIP);
+			for(int depth = -CIRCLEDEPTH; depth <= CIRCLEDEPTH; depth += 10) {
+				float ang = 0.;
+				float dang = 2. * M_PI / (float)CIRLCESEGS;
+				for(int i = 0; i < CIRLCESEGS; i++) {
+					glColor3f(1., 1., 1.);
+					glVertex3f(10*cos(ang) - 20., 10*sin(ang), depth);
+					ang += dang;
+				}
+			}
+		glEnd();
+	glEndList( );
+
+	// Create spiral 1 
+	SpiralList1 = glGenLists( 1 );
+	float angle1 = 0;
+	glNewList( SpiralList1, GL_COMPILE );
+		glBegin(GL_TRIANGLE_FAN);
+			// Create SPIRALSEG segments in the spiral
+			for(int i = 0; i < SPIRALSEGS; i++) {
+				// Make the color more pronounces as we go up the spiral
+				glColor3f(0., (float)i / (float)SPIRALSEGS, 0.);
+				glVertex3f(3*cos(angle1), 3*sin(angle1), (i / 2) - (SPIRALSEGS / 4));
+				angle1 += .25;
+			}
+		glEnd();
+	glEndList();
+
+	// Create spiral 2
+	SpiralList2 = glGenLists( 1 );
+	float angle2 = 0;
+	glNewList( SpiralList2, GL_COMPILE );
+		glBegin(GL_TRIANGLE_FAN);
+			for(int i = 0; i < SPIRALSEGS; i++) {
+				glColor3f(0., 0., (float)i / (float)SPIRALSEGS);
+				glVertex3f(3*cos(angle2) - 20., 3*sin(angle2), (i / 2) - (SPIRALSEGS / 4));
+				angle2 += .25;
+			}
+		glEnd();
+	glEndList();
+
+	// Create spiral 3
+	SpiralList3 = glGenLists( 1 );
+	float angle3 = 0;
+	glNewList( SpiralList3, GL_COMPILE );
+		glBegin(GL_TRIANGLE_FAN);
+			for(int i = 0; i < SPIRALSEGS; i++) {
+				glColor3f((float)i / (float)SPIRALSEGS, 0., 0.);
+				glVertex3f(3*cos(angle3) + 20., 3*sin(angle3), (i / 2) - (SPIRALSEGS / 4));
+				angle3 += .25;
+			}
+		glEnd();
+	glEndList();
 }
 
 
