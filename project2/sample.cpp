@@ -16,79 +16,50 @@
 #include "glut.h"
 
 
-//	This is a sample OpenGL / GLUT program
-//
-//	The objective is to draw a 3d object and change the color of the axes
-//		with a glut menu
-//
-//	The left mouse button does rotation
-//	The middle mouse button does scaling
-//	The user interface allows:
-//		1. The axes to be turned on and off
-//		2. The color of the axes to be changed
-//		3. Debugging to be turned on and off
-//		4. Depth cueing to be turned on and off
-//		5. The projection to be changed
-//		6. The transformations to be reset
-//		7. The program to quit
-//
+// Animated James Bond Cessna Airplane
+// With two perspectivecs
 //	Author:			Peter LaMontagne
 
 // title of these windows:
-
 const char *WINDOWTITLE = "Project 2 -- Peter LaMontagne";
 const char *GLUITITLE   = "User Interface Window";
 
 // what the glui package defines as true and false:
-
 const int GLUITRUE  = true;
 const int GLUIFALSE = false;
 
 // the escape key:
-
 const int ESCAPE = 0x1b;
 
 // initial window size:
-
 const int INIT_WINDOW_SIZE = 800;
 
-// size of the 3d box to be drawn:
-
-const float BOXSIZE = 2.f;
-
-// Length of the spiral to be drawn
-
-const int SPIRALSEGS = 200;
-
-// Constants for the circles
-
-const int CIRLCESEGS = 100;
-const int CIRCLEDEPTH = 100;
+// Propeller parameters
+const float PROPELLER_RADIUS = 1.0;
+const float PROPELLER_WIDTH = 0.4;
 
 // multiplication factors for input interaction:
 //  (these are known from previous experience)
-
 const float ANGFACT = 1.f;
 const float SCLFACT = 0.005f;
 
 // minimum allowable scale factor:
-
 const float MINSCALE = 0.05f;
 
 // scroll wheel button values:
-
 const int SCROLL_WHEEL_UP   = 3;
 const int SCROLL_WHEEL_DOWN = 4;
 
 // equivalent mouse movement when we click the scroll wheel:
-
 const float SCROLL_WHEEL_CLICK_FACTOR = 5.f;
 
 // active mouse buttons (or them together):
-
 const int LEFT   = 4;
 const int MIDDLE = 2;
 const int RIGHT  = 1;
+
+// Animation Parameters
+const int MS_IN_THE_ANIMATION_CYCLE = 1000;
 
 // which projection:
 
@@ -96,6 +67,12 @@ enum Projections
 {
 	ORTHO,
 	PERSP
+};
+
+enum Perspectives
+{
+	OUTSIDE,
+	INSIDE
 };
 
 // which button:
@@ -162,30 +139,30 @@ const GLfloat FOGSTART    = 1.5f;
 const GLfloat FOGEND      = 4.f;
 
 
-// what options should we compile-in?
-// in general, you don't need to worry about these
-// i compile these in to show class examples of things going wrong
-
-//#define DEMO_DEPTH_BUFFER
-
-
 // non-constant global variables:
 
 int		ActiveButton;			// current button that is down
-GLuint	AxesList;				// list to hold the axes
-int		AxesOn;					// != 0 means to draw the axes
+int		FreezeOn;				// != 0 means to freeze the scene
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
 int		DepthFightingOn;		// != 0 means to force the creation of z-fighting
-GLuint	CessnaList;				// DisplayList for the Cessna
+GLuint	CessnaList;				// Display List for the Cessna
+GLuint  IndividualPropellerList;// Display List for a propeller
+GLuint  MainPropellerList;		// Display List for all 3 propellers
+GLuint  LeftTopPropellerList;	// Left top propeller display list
+GLuint  RightTopPropellerList;	// Right top propeller display list
+GLuint  TeapotList;				// Display List for the teapot
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 int		ShadowsOn;				// != 0 means to turn shadows on
 int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
+int		WhichPerspective;		// OUTSIDE or INSIDE
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
+float   Time;					// time in animation
+float	BladeAngle;				// Rotation of the propellers
 
 // Include the cessna geometry
 #include "cessna.cpp"
@@ -194,7 +171,7 @@ float	Xrot, Yrot;				// rotation angles in degrees
 
 void	Animate( );
 void	Display( );
-void	DoAxesMenu( int );
+void	DoFloatMenu( int );
 void	DoColorMenu( int );
 void	DoDepthBufferMenu( int );
 void	DoDepthFightingMenu( int );
@@ -214,8 +191,6 @@ void	MouseMotion( int, int );
 void	Reset( );
 void	Resize( int, int );
 void	Visibility( int );
-
-void			Axes( float );
 
 unsigned char *	BmpToTexture( char *, int *, int * );
 int				ReadInt( FILE * );
@@ -278,9 +253,15 @@ main( int argc, char *argv[ ] )
 
 void
 Animate( )
-{
-	// put animation stuff in here -- change some global variables
-	// for Display( ) to find:
+{	
+	if(!FreezeOn) {
+		int ms = glutGet( GLUT_ELAPSED_TIME );	// milliseconds
+		ms  %=  MS_IN_THE_ANIMATION_CYCLE;
+		Time = (float)ms  /  (float)MS_IN_THE_ANIMATION_CYCLE;        // [ 0., 1. )
+
+		// Use this to calculate the angle of a blade
+		BladeAngle = Time * 360;
+	}
 
 	// force a call to Display( ) next time it is convenient:
 
@@ -295,29 +276,20 @@ void
 Display( )
 {
 	// set which window we want to do the graphics into:
-
 	glutSetWindow( MainWindow );
 
 
 	// erase the background:
-
 	glDrawBuffer( GL_BACK );
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
 	glEnable( GL_DEPTH_TEST );
-#ifdef DEMO_DEPTH_BUFFER
-	if( DepthBufferOn == 0 )
-		glDisable( GL_DEPTH_TEST );
-#endif
-
 
 	// specify shading to be flat:
-
 	glShadeModel( GL_FLAT );
 
 
 	// set the viewport to a square centered in the window:
-
 	GLsizei vx = glutGet( GLUT_WINDOW_WIDTH );
 	GLsizei vy = glutGet( GLUT_WINDOW_HEIGHT );
 	GLsizei v = vx < vy ? vx : vy;			// minimum dimension
@@ -330,7 +302,6 @@ Display( )
 	// remember that the Z clipping  values are actually
 	// given as DISTANCES IN FRONT OF THE EYE
 	// USE gluOrtho2D( ) IF YOU ARE DOING 2D !
-
 	glMatrixMode( GL_PROJECTION );
 	glLoadIdentity( );
 	if( WhichProjection == ORTHO )
@@ -340,31 +311,33 @@ Display( )
 
 
 	// place the objects into the scene:
-
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
 
 
 	// set the eye position, look-at position, and up-vector:
-
-	gluLookAt( 0.f, -50.f, 3.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
-
-
-	// rotate the scene:
-
-	glRotatef( (GLfloat)Yrot, 0.f, 1.f, 0.f );
-	glRotatef( (GLfloat)Xrot, 1.f, 0.f, 0.f );
+	if(WhichPerspective == OUTSIDE) {
+		gluLookAt( 25.f, 30.f, -40.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
+	} else {
+		gluLookAt(0.f, 1.2f, 1.f, 	0.f, 5.f, 10.f,		0.f, 1.f, 0.f);
+	}
 
 
-	// uniformly scale the scene:
+	// Apply rotation and scale only in outside view
+	if(WhichPerspective == OUTSIDE) {
+		// rotate the scene:
+		glRotatef( (GLfloat)Yrot, 0.f, 1.f, 0.f );
+		glRotatef( (GLfloat)Xrot, 1.f, 0.f, 0.f );
 
-	if( Scale < MINSCALE )
-		Scale = MINSCALE;
-	glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
+
+		// uniformly scale the scene:
+		if( Scale < MINSCALE )
+			Scale = MINSCALE;
+		glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
+	}
 
 
 	// set the fog parameters:
-
 	if( DepthCueOn != 0 )
 	{
 		glFogi( GL_FOG_MODE, FOGMODE );
@@ -379,70 +352,52 @@ Display( )
 		glDisable( GL_FOG );
 	}
 
-
-	// possibly draw the axes:
-
-	if( AxesOn != 0 )
-	{
-		glColor3fv( &Colors[WhichColor][0] );
-		glCallList( AxesList );
-	}
-
-
 	// since we are using glScalef( ), be sure the normals get unitized:
-
 	glEnable( GL_NORMALIZE );
 
 
-	// Draw the Cessna
-
+	// Draw the Cessna and teapot, which are always static
 	glCallList(CessnaList);
+	glCallList(TeapotList);
 
+	// Use the global varibles to rotate and draw the top propellers
+	glPushMatrix();
+	glTranslatef(10.f, 3.f, 0.f);
+	glRotatef(BladeAngle * 2.0f, 0.f, 1.f, 0.f);
+	glRotatef(90.f, 1.f, 0.f, 0.f);
+	glScalef(3., 3., 0.);
+	glCallList(IndividualPropellerList);
+	glPopMatrix();
 
-	// draw some gratuitous text that just rotates on top of the scene:
-	// i commented out the actual text-drawing calls -- put them back in if you have a use for them
-	// a good use for thefirst one might be to have your name on the screen
-	// a good use for the second one might be to have vertex numbers on the screen alongside each vertex
+	glPushMatrix();
+	glTranslatef(-10.f, 3.f, 0.f);
+	glRotatef(-BladeAngle * 2.0f, 0.f, 1.f, 0.f);
+	glRotatef(90.f, 1.f, 0.f, 0.f);
+	glScalef(3., 3., 0.);
+	glCallList(IndividualPropellerList);
+	glPopMatrix();
 
-	glDisable( GL_DEPTH_TEST );
-	glColor3f( 0.f, 1.f, 1.f );
-	//DoRasterString( 0.f, 1.f, 0.f, (char *)"Text That Moves" );
-
-
-	// draw some gratuitous text that is fixed on the screen:
-	//
-	// the projection matrix is reset to define a scene whose
-	// world coordinate system goes from 0-100 in each axis
-	//
-	// this is called "percent units", and is just a convenience
-	//
-	// the modelview matrix is reset to identity as we don't
-	// want to transform these coordinates
-
-	glDisable( GL_DEPTH_TEST );
-	glMatrixMode( GL_PROJECTION );
-	glLoadIdentity( );
-	gluOrtho2D( 0.f, 100.f,     0.f, 100.f );
-	glMatrixMode( GL_MODELVIEW );
-	glLoadIdentity( );
-	glColor3f( 1.f, 1.f, 1.f );
-	//DoRasterString( 5.f, 5.f, 0.f, (char *)"Text That Doesn't" );
+	// Do the same for the front propeller
+	glPushMatrix();
+	glTranslatef( 0., 0., 7.5 );
+	glRotatef(BladeAngle, 0.f, 0.f, 1.f);
+	glScalef(5., 5., 0.);
+	glCallList(IndividualPropellerList);
+	glPopMatrix();
 
 	// swap the double-buffered framebuffers:
-
 	glutSwapBuffers( );
 
 	// be sure the graphics buffer has been sent:
 	// note: be sure to use glFlush( ) here, not glFinish( ) !
-
 	glFlush( );
 }
 
 
 void
-DoAxesMenu( int id )
+DoFreezeMenu( int id )
 {
-	AxesOn = id;
+	FreezeOn = id;
 
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
@@ -539,6 +494,16 @@ DoProjectMenu( int id )
 }
 
 
+void
+DoPerspectiveMenu( int id )
+{
+	WhichPerspective = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
 // use glut to display a string of characters using a raster font:
 
 void
@@ -601,7 +566,7 @@ InitMenus( )
 		glutAddMenuEntry( ColorNames[i], i );
 	}
 
-	int axesmenu = glutCreateMenu( DoAxesMenu );
+	int freezemenu = glutCreateMenu( DoFreezeMenu );
 	glutAddMenuEntry( "Off",  0 );
 	glutAddMenuEntry( "On",   1 );
 
@@ -625,16 +590,17 @@ InitMenus( )
 	glutAddMenuEntry( "Orthographic",  ORTHO );
 	glutAddMenuEntry( "Perspective",   PERSP );
 
-	int mainmenu = glutCreateMenu( DoMainMenu );
-	glutAddSubMenu(   "Axes",          axesmenu);
-	glutAddSubMenu(   "Axis Colors",   colormenu);
+	int perspmenu = glutCreateMenu( DoPerspectiveMenu );
+	glutAddMenuEntry( "Outside",  OUTSIDE );
+	glutAddMenuEntry( "Inside",   INSIDE );
 
-#ifdef DEMO_DEPTH_BUFFER
-	glutAddSubMenu(   "Depth Buffer",  depthbuffermenu);
-#endif
+	int mainmenu = glutCreateMenu( DoMainMenu );
+	glutAddSubMenu(   "Freeze",          freezemenu);
+	glutAddSubMenu(   "Axis Colors",   colormenu);
 
 	glutAddSubMenu(   "Depth Cue",     depthcuemenu);
 	glutAddSubMenu(   "Projection",    projmenu );
+	glutAddSubMenu(   "Perspective",    perspmenu );
 	glutAddMenuEntry( "Reset",         RESET );
 	glutAddSubMenu(   "Debug",         debugmenu);
 	glutAddMenuEntry( "Quit",          QUIT );
@@ -751,6 +717,7 @@ InitLists( )
 	struct tri *tp;
 	float p01[3], p02[3], n[3];
 
+	// Display list for the Cessna
 	CessnaList = glGenLists( 1 );
 	glNewList( CessnaList, GL_COMPILE );
 
@@ -777,7 +744,7 @@ InitLists( )
 			Cross( p01, p02, n );
 			Unit( n, n );
 			n[1] = fabs( n[1] );
-			glColor3f( n[1], .5f*n[1], 0. );
+			glColor3f( .25f*n[1], .5f*n[1], 0. );
 
 			glVertex3f( p0->x, p0->y, p0->z );
 			glVertex3f( p1->x, p1->y, p1->z );
@@ -785,6 +752,39 @@ InitLists( )
 		}
 	glEnd( );
 	glPopMatrix( );
+
+	glEndList();
+
+	// Display list for a single propeller
+	IndividualPropellerList = glGenLists(1);
+	glNewList( IndividualPropellerList, GL_COMPILE );
+
+	// Set the color for the propellers
+	glColor3f(1., 1., 1.);
+
+	glBegin( GL_TRIANGLES );
+		glVertex2f(  PROPELLER_RADIUS,  PROPELLER_WIDTH / 2. );
+		glVertex2f(  0., 0. );
+		glVertex2f(  PROPELLER_RADIUS, -PROPELLER_WIDTH / 2. );
+
+		glVertex2f( -PROPELLER_RADIUS, -PROPELLER_WIDTH / 2. );
+		glVertex2f(  0., 0. );
+		glVertex2f( -PROPELLER_RADIUS,  PROPELLER_WIDTH / 2. );
+	glEnd( );
+
+	glEndList();
+
+	// Create the display list for the teapot
+	TeapotList = glGenLists(1);
+	glNewList( TeapotList, GL_COMPILE );
+
+	glPushMatrix();
+	glNewList(TeapotList, GL_COMPILE);
+	glColor3f(1., 1., 1.);
+	glTranslatef( 0., 15., 40. );
+	glutWireTeapot(5.);
+	glPopMatrix();
+
 	glEndList();
 }
 
@@ -928,7 +928,7 @@ void
 Reset( )
 {
 	ActiveButton = 0;
-	AxesOn = 1;
+	FreezeOn = 0;
 	DebugOn = 0;
 	DepthBufferOn = 1;
 	DepthFightingOn = 0;
@@ -937,6 +937,7 @@ Reset( )
 	ShadowsOn = 0;
 	WhichColor = WHITE;
 	WhichProjection = PERSP;
+	WhichPerspective = OUTSIDE;
 	Xrot = Yrot = 0.;
 }
 
@@ -1005,75 +1006,6 @@ const float LENFRAC = 0.10f;
 
 // fraction of length to use as start location of the characters:
 const float BASEFRAC = 1.10f;
-
-//	Draw a set of 3D axes:
-//	(length is the axis length in world coordinates)
-
-void
-Axes( float length )
-{
-	glBegin( GL_LINE_STRIP );
-		glVertex3f( length, 0., 0. );
-		glVertex3f( 0., 0., 0. );
-		glVertex3f( 0., length, 0. );
-	glEnd( );
-	glBegin( GL_LINE_STRIP );
-		glVertex3f( 0., 0., 0. );
-		glVertex3f( 0., 0., length );
-	glEnd( );
-
-	float fact = LENFRAC * length;
-	float base = BASEFRAC * length;
-
-	glBegin( GL_LINE_STRIP );
-		for( int i = 0; i < 4; i++ )
-		{
-			int j = xorder[i];
-			if( j < 0 )
-			{
-				
-				glEnd( );
-				glBegin( GL_LINE_STRIP );
-				j = -j;
-			}
-			j--;
-			glVertex3f( base + fact*xx[j], fact*xy[j], 0.0 );
-		}
-	glEnd( );
-
-	glBegin( GL_LINE_STRIP );
-		for( int i = 0; i < 5; i++ )
-		{
-			int j = yorder[i];
-			if( j < 0 )
-			{
-				
-				glEnd( );
-				glBegin( GL_LINE_STRIP );
-				j = -j;
-			}
-			j--;
-			glVertex3f( fact*yx[j], base + fact*yy[j], 0.0 );
-		}
-	glEnd( );
-
-	glBegin( GL_LINE_STRIP );
-		for( int i = 0; i < 6; i++ )
-		{
-			int j = zorder[i];
-			if( j < 0 )
-			{
-				
-				glEnd( );
-				glBegin( GL_LINE_STRIP );
-				j = -j;
-			}
-			j--;
-			glVertex3f( 0.0, fact*zy[j], base + fact*zx[j] );
-		}
-	glEnd( );
-
-}
 
 // read a BMP file into a Texture:
 
