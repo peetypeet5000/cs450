@@ -99,6 +99,8 @@ int		WhichPerspective;		// OUTSIDE or INSIDE
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 float   Time;					// time in animation
+unsigned char * Texture;	// the texels
+unsigned int    WorldTex;	// the texture object
 
 // function prototypes:
 
@@ -270,8 +272,16 @@ Display( )
 	// since we are using glScalef( ), be sure the normals get unitized:
 	glEnable( GL_NORMALIZE );
 
+	// Start texturing
+	glEnable( GL_TEXTURE_2D );
+	glBindTexture(GL_TEXTURE_2D, WorldTex);
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
 	// Draw objects
 	glCallList(SphereList);
+
+	// Stop texturing
+	glDisable( GL_TEXTURE_2D );
 
 	// swap the double-buffered framebuffers:
 	glutSwapBuffers( );
@@ -495,6 +505,24 @@ InitGraphics( )
 		fprintf( stderr, "GLEW initialized OK\n" );
 	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
+
+	// Read in the texture bmp file
+	int width, height;
+	Texture = BmpToTexture( (char *)"worldtex.bmp", &width, &height );
+	if( Texture == NULL )
+			fprintf( stderr, "Cannot open texture '%s'\n", "worldtex.bmp" );
+	else
+			fprintf( stderr, "Width = %d ; Height = %d\n", width, height );
+
+	// Set texture parameters
+	glPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
+	glGenTextures( 1, &WorldTex );
+	glBindTexture( GL_TEXTURE_2D, WorldTex );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexImage2D( GL_TEXTURE_2D, 0, 3, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, Texture );
 
 }
 
