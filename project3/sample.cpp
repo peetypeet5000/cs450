@@ -57,7 +57,7 @@ const int MIDDLE = 2;
 const int RIGHT  = 1;
 
 // Animation Parameters
-const int MS_IN_THE_ANIMATION_CYCLE = 1000;
+const int MS_IN_THE_ANIMATION_CYCLE = 20000;
 
 // which projection:
 
@@ -67,10 +67,11 @@ enum Projections
 	PERSP
 };
 
-enum Perspectives
+enum TextureModes
 {
-	OUTSIDE,
-	INSIDE
+	NONE,
+	TEXTURED,
+	DISTORTED
 };
 
 // which button:
@@ -95,7 +96,7 @@ int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 int		ShadowsOn;				// != 0 means to turn shadows on
 int		WhichProjection;		// ORTHO or PERSP
-int		WhichPerspective;		// OUTSIDE or INSIDE
+int		WhichTexture;			// NONE or TEXTURED or DISTORTED
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 float   Time;					// time in animation
@@ -116,7 +117,6 @@ void	DoRasterString( float, float, float, char * );
 void	DoStrokeString( float, float, float, float, char * );
 float	ElapsedSeconds( );
 void	InitGraphics( );
-void	InitLists( );
 void	InitMenus( );
 void	Keyboard( unsigned char, int, int );
 void	MouseButton( int, int, int, int );
@@ -150,10 +150,6 @@ main( int argc, char *argv[ ] )
 	// setup all the graphics stuff:
 
 	InitGraphics( );
-
-	// create the display structures that will not change:
-
-	InitLists( );
 
 	// init all the global variables used by Display( ):
 	// this will also post a redisplay
@@ -190,7 +186,9 @@ Animate( )
 	if(!FreezeOn) {
 		int ms = glutGet( GLUT_ELAPSED_TIME );	// milliseconds
 		ms  %=  MS_IN_THE_ANIMATION_CYCLE;
-		Time = (float)ms  /  (float)MS_IN_THE_ANIMATION_CYCLE;        // [ 0., 1. )
+		// Use sin function to smoothly go from 0 - 1 and back again     
+		Time = sin(M_PI * ms/MS_IN_THE_ANIMATION_CYCLE);
+		printf("%f\n", Time);
 	}
 
 	// force a call to Display( ) next time it is convenient:
@@ -246,25 +244,17 @@ Display( )
 
 
 	// set the eye position, look-at position, and up-vector:
-	if(WhichPerspective == OUTSIDE) {
-		gluLookAt( 25.f, 30.f, -40.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
-	} else {
-		gluLookAt(0.f, 1.2f, 1.f, 	0.f, 5.f, 10.f,		0.f, 1.f, 0.f);
-	}
+	gluLookAt( 25.f, 30.f, -40.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
+
+	// rotate the scene:
+	glRotatef( (GLfloat)Yrot, 0.f, 1.f, 0.f );
+	glRotatef( (GLfloat)Xrot, 1.f, 0.f, 0.f );
 
 
-	// Apply rotation and scale only in outside view
-	if(WhichPerspective == OUTSIDE) {
-		// rotate the scene:
-		glRotatef( (GLfloat)Yrot, 0.f, 1.f, 0.f );
-		glRotatef( (GLfloat)Xrot, 1.f, 0.f, 0.f );
-
-
-		// uniformly scale the scene:
-		if( Scale < MINSCALE )
-			Scale = MINSCALE;
-		glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
-	}
+	// uniformly scale the scene:
+	if( Scale < MINSCALE )
+		Scale = MINSCALE;
+	glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
 
 	// No Fog
 	glDisable( GL_FOG );
@@ -272,16 +262,22 @@ Display( )
 	// since we are using glScalef( ), be sure the normals get unitized:
 	glEnable( GL_NORMALIZE );
 
-	// Start texturing
-	glEnable( GL_TEXTURE_2D );
-	glBindTexture(GL_TEXTURE_2D, WorldTex);
-	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+	// Start texturing if enabled
+	if(WhichTexture == TEXTURED || WhichTexture == DISTORTED) {
+		glEnable( GL_TEXTURE_2D );
+		glBindTexture(GL_TEXTURE_2D, WorldTex);
+		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+	}
 
 	// Draw objects
-	glCallList(SphereList);
+	glPushMatrix();
+	OsuSphere(10.f, 50, 50, WhichTexture, Time);
+	glPopMatrix();
 
 	// Stop texturing
-	glDisable( GL_TEXTURE_2D );
+	if(WhichTexture == TEXTURED || WhichTexture == DISTORTED) {
+		glDisable( GL_TEXTURE_2D );
+	}
 
 	// swap the double-buffered framebuffers:
 	glutSwapBuffers( );
@@ -336,6 +332,16 @@ void
 DoProjectMenu( int id )
 {
 	WhichProjection = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+void
+DoTextureMenu( int id )
+{
+	WhichTexture = id;
 
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
@@ -405,9 +411,15 @@ InitMenus( )
 	glutAddMenuEntry( "Orthographic",  ORTHO );
 	glutAddMenuEntry( "Perspective",   PERSP );
 
+	int texmenu = glutCreateMenu( DoTextureMenu );
+	glutAddMenuEntry( "No Texture",  NONE );
+	glutAddMenuEntry( "Textured",   TEXTURED );
+	glutAddMenuEntry( "Distorted",   DISTORTED );
+
+
 	int mainmenu = glutCreateMenu( DoMainMenu );
 	glutAddSubMenu(   "Freeze",          freezemenu);
-
+	glutAddSubMenu(   "Texture",          texmenu);
 	glutAddSubMenu(   "Projection",    projmenu );
 	glutAddMenuEntry( "Reset",         RESET );
 	glutAddMenuEntry( "Quit",          QUIT );
@@ -524,28 +536,6 @@ InitGraphics( )
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexImage2D( GL_TEXTURE_2D, 0, 3, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, Texture );
 
-}
-
-
-// initialize the display lists that will not change:
-// (a display list is a way to store opengl commands in
-//  memory so that they can be played back efficiently at a later time
-//  with a call to glCallList( )
-
-void
-InitLists( )
-{
-	glutSetWindow( MainWindow );
-
-	// Create the display list for the teapot
-	SphereList = glGenLists(1);
-	glNewList( SphereList, GL_COMPILE );
-
-	glPushMatrix();
-	OsuSphere(10.f, 20, 20);
-	glPopMatrix();
-
-	glEndList();
 }
 
 
@@ -693,7 +683,7 @@ Reset( )
 	Scale  = 1.0;
 	ShadowsOn = 0;
 	WhichProjection = PERSP;
-	WhichPerspective = OUTSIDE;
+	WhichTexture = TEXTURED;
 	Xrot = Yrot = 0.;
 }
 

@@ -2,7 +2,6 @@
 #include <math.h>
 #include <OpenGL/gl.h>
 
-
 #ifndef POINT_H
 #define POINT_H
 struct point
@@ -37,7 +36,7 @@ SphPtsPointer( int lat, int lng )
 }
 
 void
-OsuSphere( float radius, int slices, int stacks )
+OsuSphere( float radius, int slices, int stacks, int WhichTexture, float Time )
 {
 	// set the globals:
 
@@ -73,8 +72,16 @@ OsuSphere( float radius, int slices, int stacks )
 			p->nx = x;
 			p->ny = y;
 			p->nz = z;
-			p->s = ( lng + M_PI    ) / ( 2.*M_PI );
-			p->t = ( lat + M_PI/2. ) / M_PI;
+			if(WhichTexture != 2) {
+				p->s = ( lng + M_PI    ) / ( 2.*M_PI );
+				p->t = ( lat + M_PI/2. ) / M_PI;
+			} else {
+				// Random number between 1 and Time + 1
+				float x = (float)rand()/(float)(RAND_MAX/Time) + 1.f;
+				p->s = ( lng + M_PI * x    ) / ( 2.*M_PI );
+				p->t = ( lat + M_PI/2.* x ) / M_PI;
+			}
+
 		}
 	}
 
