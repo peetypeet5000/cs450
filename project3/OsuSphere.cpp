@@ -78,8 +78,8 @@ OsuSphere( float radius, int slices, int stacks, int WhichTexture, float Time )
 			} else {
 				// Random number between 1 and Time + 1
 				float x = (float)rand()/(float)(RAND_MAX/Time) + 1.f;
-				p->s = ( lng + M_PI * x    ) / ( 2.*M_PI );
-				p->t = ( lat + M_PI/2.* x ) / M_PI;
+				p->s = ( lng + M_PI   ) / ( 2.*M_PI ) + 3 * (Time * (( lat + M_PI/2.) / M_PI));
+				p->t = ( lat + M_PI/2.) / M_PI + (Time * ( lng + M_PI   ) / ( 2.*M_PI ));
 			}
 
 		}

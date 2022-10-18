@@ -57,7 +57,7 @@ const int MIDDLE = 2;
 const int RIGHT  = 1;
 
 // Animation Parameters
-const int MS_IN_THE_ANIMATION_CYCLE = 20000;
+const int MS_IN_THE_ANIMATION_CYCLE = 10000;
 
 // which projection:
 
@@ -188,7 +188,6 @@ Animate( )
 		ms  %=  MS_IN_THE_ANIMATION_CYCLE;
 		// Use sin function to smoothly go from 0 - 1 and back again     
 		Time = sin(M_PI * ms/MS_IN_THE_ANIMATION_CYCLE);
-		printf("%f\n", Time);
 	}
 
 	// force a call to Display( ) next time it is convenient:
@@ -271,6 +270,7 @@ Display( )
 
 	// Draw objects
 	glPushMatrix();
+	glColor3f(1., .0, 1.);
 	OsuSphere(10.f, 50, 50, WhichTexture, Time);
 	glPopMatrix();
 
@@ -520,9 +520,9 @@ InitGraphics( )
 
 	// Read in the texture bmp file
 	int width, height;
-	Texture = BmpToTexture( (char *)"worldtex.bmp", &width, &height );
+	Texture = BmpToTexture( (char *)"bob.bmp", &width, &height );
 	if( Texture == NULL )
-			fprintf( stderr, "Cannot open texture '%s'\n", "worldtex.bmp" );
+			fprintf( stderr, "Cannot open texture '%s'\n", "bob.bmp" );
 	else
 			fprintf( stderr, "Width = %d ; Height = %d\n", width, height );
 
