@@ -94,6 +94,8 @@ int		ActiveButton;			// current button that is down
 int		FreezeOn;				// != 0 means to freeze the scene
 int		DebugOn;				// != 0 means to print debugging info
 GLuint	SphereList;				// Display List for OSU Sphere
+GLuint  TorusList;				// Display list for the Torus
+GLuint  IcosahedronList;		// Display list for the Icosahedron
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 int		ShadowsOn;				// != 0 means to turn shadows on
@@ -122,6 +124,7 @@ void	DoRasterString( float, float, float, char * );
 void	DoStrokeString( float, float, float, float, char * );
 float	ElapsedSeconds( );
 void	InitGraphics( );
+void	InitLists();
 void	InitMenus( );
 void	Keyboard( unsigned char, int, int );
 void	MouseButton( int, int, int, int );
@@ -158,6 +161,7 @@ main( int argc, char *argv[ ] )
 	// setup all the graphics stuff:
 
 	InitGraphics( );
+	InitLists();
 
 	// init all the global variables used by Display( ):
 	// this will also post a redisplay
@@ -191,12 +195,10 @@ main( int argc, char *argv[ ] )
 void
 Animate( )
 {	
-	if(!FreezeOn) {
-		int ms = glutGet( GLUT_ELAPSED_TIME );	// milliseconds
-		ms  %=  MS_IN_THE_ANIMATION_CYCLE;
-		// Use sin function to smoothly go from 0 - 1 and back again     
-		Time = sin(M_PI * ms/MS_IN_THE_ANIMATION_CYCLE);
-	}
+	int ms = glutGet( GLUT_ELAPSED_TIME );	// milliseconds
+	ms  %=  MS_IN_THE_ANIMATION_CYCLE;
+	// Use sin function to smoothly go from 0 - 1 and back again     
+	Time = sin(M_PI * ms/MS_IN_THE_ANIMATION_CYCLE);
 
 	// force a call to Display( ) next time it is convenient:
 
@@ -277,11 +279,11 @@ Display( )
 	// Draw light 0
 	if(Light0On) {
 		glPushMatrix();
-			SetPointLight( GL_LIGHT0,  20.f, 0.f, 0.f,  1., 1., 1. );
+			SetPointLight( GL_LIGHT0,  0.f, 0.f, 20.f,  1., 1., 1. );
 			glDisable( GL_LIGHTING );
 			glColor3f(1.f, 1.f, 1.f);
 			glPushMatrix();
-				glTranslatef(20.f, 0.f, 0.f);
+				glTranslatef(0.f, 0.f, 20.f);
 				OsuSphere(1.f, 50, 50);
 			glPopMatrix();
 			glEnable( GL_LIGHTING );
@@ -306,7 +308,7 @@ Display( )
 		glDisable( GL_LIGHT1 );
 	}
 
-	// Draw light 2
+	// Draw light 2 (animated)
 	if(Light2On) {
 		glPushMatrix();
 			SetPointLight( GL_LIGHT2,  (Time * 80.f) - 40.f, 20.f, 0.f, .9f, .6f, .2f );
@@ -327,44 +329,56 @@ Display( )
 	glBindTexture(GL_TEXTURE_2D, WorldTex);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
-	// Draw objects
+	// Draw textured Earth at the origin
 	glPushMatrix();
 		SetMaterial( 1.f, 1.f, 1.f,  16.f );
 		glShadeModel( GL_SMOOTH );
-		OsuSphere(10.f, 50, 50);
+		glCallList(SphereList);
 	glPopMatrix();
 
 	// Stop texturing
 	glDisable( GL_TEXTURE_2D );
 
+	// Draw smooth shaded shiny Torus to the right
 	glPushMatrix();
-		SetMaterial( .0f, .4f, .5f,  1.f );
-		glShadeModel( GL_FLAT );
+		SetMaterial( .0f, .4f, .5f,  128.f );
+		glShadeModel( GL_SMOOTH );
 		glTranslatef(-30.f, 0.f, 0.f);
-		OsuTorus(5.f, 5.f, 20, 20);
+		glCallList(TorusList);
 	glPopMatrix();
 
+	// Draw flat shaded Torus above
+	glPushMatrix();
+		SetMaterial( .0f, .4f, .5f,  128.f );
+		glShadeModel( GL_FLAT );
+		glTranslatef(0.f, 40.f, 0.f);
+		glCallList(TorusList);
+	glPopMatrix();
+
+	// Draw smooth shaded dull Torus to the left
+	glPushMatrix();
+		SetMaterial( .0f, .4f, .5f,  1.f );
+		glShadeModel( GL_SMOOTH );
+		glTranslatef(30.f, 0.f, 0.f);
+		glCallList(TorusList);
+	glPopMatrix();
+
+	// Draw large Icosahedron below spotlight
 	glPushMatrix();
 		SetMaterial( .0f, .4f, .5f,  16.f );
 		glShadeModel( GL_SMOOTH );
-		glTranslatef(0.f, -40.f, 0.f);
-		glScalef(5.f, 5.f, 5.f);
-		glutSolidOctahedron();
+		glTranslatef(0.f, -80.f, 0.f);
+		glScalef(2.f, 2.f, 2.f);
+		glCallList(IcosahedronList);
 	glPopMatrix();
 
-	// Draw two spheres to see shineness
-	glPushMatrix();
-		SetMaterial( 0.f, 0.f, 1.f,  3.f );
-		glShadeModel( GL_SMOOTH );
-		glTranslatef(30.f, -5.f, 0.f);
-		OsuSphere(5.f, 50, 50);
-	glPopMatrix();
-
+	// Draw rotating shiny Icosahedron behind
 	glPushMatrix();
 		SetMaterial( 0.f, 0.f, 1.f,  128.f );
 		glShadeModel( GL_SMOOTH );
-		glTranslatef(30.f, 5.f, 0.f);
-		OsuSphere(5.f, 50, 50);
+		glTranslatef(0.f, 0.f, -30.f);
+		glRotatef(360. * Time, 0.f, 1.f, 0.f);
+		glCallList(IcosahedronList);
 	glPopMatrix();
 
 	// Stop lighting
@@ -630,6 +644,50 @@ InitGraphics( )
 }
 
 
+// initialize the display lists that will not change:
+// (a display list is a way to store opengl commands in
+//  memory so that they can be played back efficiently at a later time
+//  with a call to glCallList( )
+
+void
+InitLists( )
+{
+	glutSetWindow( MainWindow );
+
+	// Create the display list for the Icosahedron
+	IcosahedronList = glGenLists(1);
+	glNewList( IcosahedronList, GL_COMPILE );
+
+		glPushMatrix();
+			glScalef(10.f, 10.f, 10.f);
+			glutSolidIcosahedron();
+		glPopMatrix();
+
+	glEndList();
+
+	// Create display list for the Torus
+	TorusList = glGenLists(1);
+	glNewList( TorusList, GL_COMPILE );
+
+		glPushMatrix();
+			OsuTorus(3.f, 5.f, 50, 50);
+		glPopMatrix();
+
+	glEndList();
+
+	// Create display list for the Sphere
+	SphereList = glGenLists(1);
+	glNewList( SphereList, GL_COMPILE );
+
+		glPushMatrix();
+			OsuSphere(10.f, 50, 50);
+		glPopMatrix();
+
+	glEndList();
+	
+}
+
+
 // the keyboard callback:
 
 void
@@ -660,6 +718,15 @@ Keyboard( unsigned char c, int x, int y )
 
 		case '2':
 			Light2On = ! Light2On;
+			break;
+
+		case 'f':
+		case 'F':
+			FreezeOn = ! FreezeOn;
+			if( FreezeOn )
+				glutIdleFunc( NULL );
+			else
+				glutIdleFunc( Animate );
 			break;
 
 		case 'q':
@@ -1245,8 +1312,8 @@ SetSpotLight( int ilight, float x, float y, float z, float xdir, float ydir, flo
 {
 	glLightfv( ilight, GL_POSITION,  Array3( x, y, z ) );
 	glLightfv( ilight, GL_SPOT_DIRECTION,  Array3(xdir,ydir,zdir) );
-	glLightf(  ilight, GL_SPOT_EXPONENT, 5. );
-	glLightf(  ilight, GL_SPOT_CUTOFF, 100. );
+	glLightf(  ilight, GL_SPOT_EXPONENT, 1. );
+	glLightf(  ilight, GL_SPOT_CUTOFF, 45. );
 	glLightfv( ilight, GL_AMBIENT,   Array3( 0., 0., 0. ) );
 	glLightfv( ilight, GL_DIFFUSE,   Array3( r, g, b ) );
 	glLightfv( ilight, GL_SPECULAR,  Array3( r, g, b ) );
