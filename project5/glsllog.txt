@@ -1,0 +1,3 @@
+
+ERROR: 0:43: 'gl_FragColor' : syntax error: syntax error
+
