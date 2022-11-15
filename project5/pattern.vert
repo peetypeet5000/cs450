@@ -1,7 +1,7 @@
 #version 120
 
-uniform float	uA;		// A
-uniform float	uB;		// B
+uniform float	uVertDistort;		// True if distortion is on
+uniform float	uAnimate;			// 0-10 value used to animate 
 
 varying  vec3  vN;		// normal vector
 varying  vec2  vST;	    // texture coords
@@ -15,7 +15,11 @@ main( )
 { 
 	vST = gl_MultiTexCoord0.st;
 	vec3 vert = gl_Vertex.xyz;
-	//<< change vert to perform vertex distortion >>
+
+	// Apply our distortion
+	vert.x = vert.x + abs(sin(pow(vert.x, 4) + uAnimate));
+	vert.y = vert.y + abs(sin(pow(vert.y, 4) + uAnimate));
+
 	vec4 ECposition = gl_ModelViewMatrix * vec4( vert, 1. );
 	vN = normalize( gl_NormalMatrix * gl_Normal );	// normal vector
 	vL = LightPosition - ECposition.xyz;		// vector from the point

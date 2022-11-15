@@ -60,7 +60,11 @@ const int MIDDLE = 2;
 const int RIGHT  = 1;
 
 // Animation Parameters
-const int MS_IN_THE_ANIMATION_CYCLE = 10000;
+const int MS_IN_THE_ANIMATION_CYCLE = 20000;
+
+// Torus Parameters
+const float INNER_RADIUS = 3.f;
+const float OUTER_RADIUS = 5.f;
 
 // which projection:
 
@@ -265,31 +269,26 @@ Display( )
 	// Start using the custom shader
 	Pattern->Use( );
 
-	// Set our vertex defaults
-	float A = 1.0f;
-	float B = 1.0f;
+	// Set our vertex default
+	float animationParameter = 1.0f;
 
 	// Override the defaults to create the distored behavior
 	if( VertexOn )
 	{
-			A = 1.0f * Time;
-			B = 1.0f * Time;
+			animationParameter = (Time * 10);	// 0-10
 	}
-	Pattern->SetUniformVariable( "uA", A );
-	Pattern->SetUniformVariable( "uB", B );
+	Pattern->SetUniformVariable( "uAnimate", animationParameter );
 
-	// Set our fragment defaults
-	float C = 1.0f;
-	float D = 1.0f;
+	// Set our fragment default
+	float fragAnimate = 2.f;
 
 	// Override the defaults to create the distored behavior
 	if( FragOn )
 	{
-			C = 1.0f * Time;
-			D = 1.0f * Time;
+			fragAnimate = 5.f * Time;
 	}
-	Pattern->SetUniformVariable( "uC", C );
-	Pattern->SetUniformVariable( "uD", D );
+	Pattern->SetUniformVariable( "uFragAnimate", fragAnimate );
+	Pattern->SetUniformVariable( "uOuterRadius", OUTER_RADIUS );
 
 	// Set lighting parameters
 	Pattern->SetUniformVariable( "uKa", .1f );
@@ -571,7 +570,7 @@ InitLists( )
 	glNewList( TorusList, GL_COMPILE );
 
 		glPushMatrix();
-			OsuTorus(3.f, 5.f, 50, 50);
+			OsuTorus(INNER_RADIUS, OUTER_RADIUS, 50, 50);
 		glPopMatrix();
 
 	glEndList();
