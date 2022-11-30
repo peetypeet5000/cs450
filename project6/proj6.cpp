@@ -79,6 +79,26 @@ enum ButtonVals
 
 const GLfloat BACKCOLOR[ ] = { 0., 0., 0., 1. };
 
+// Curve structs
+struct Point
+{
+        float x0, y0, z0;       // initial coordinates
+        float x,  y,  z;        // animated coordinates
+};
+
+struct Curve6			// for a 6-point curve
+{
+        float r, g, b;
+        Point p0, p1, p2, p3, p4, p5;
+};
+
+struct Curve8			// for an 8-point curve
+{
+        float r, g, b;
+        Point p0, p1, p2, p3, p4, p5, p6, p7;
+};
+
+
 // non-constant global variables:
 
 int		ActiveButton;			// current button that is down
@@ -94,6 +114,10 @@ float	Xrot, Yrot;				// rotation angles in degrees
 float   Time;					// time in animation
 unsigned char * Texture;	// the texels
 unsigned int    WorldTex;	// the texture object
+
+// My curves
+
+Curve6 Test;				// one curve by itself
 
 // function prototypes:
 
@@ -127,6 +151,12 @@ void			HsvRgb( float[3], float [3] );
 void			Cross(float[3], float[3], float[3]);
 float			Dot(float [3], float [3]);
 float			Unit(float [3], float [3]);
+
+void RotateX( Point* , float, float, float, float );
+void RotateY( Point*, float, float, float, float );
+void RotateZ( Point*, float, float, float, float );
+void Translate( Point*, float, float, float );
+void DrawFourPointCurve( Point*, Point*, Point*, Point* );
 
 
 // main program:
@@ -263,6 +293,12 @@ Display( )
 	glColor3f(1., .0, 1.);
 	glCallList(SphereList);
 	glPopMatrix();
+
+	// Draw lines
+	glColor3f( Test.r, Test.g, Test.b );
+	DrawFourPointCurve( &Test.p0, &Test.p1, &Test.p2, &Test.p3 );	// p0-p1-p2-p3
+	DrawFourPointCurve( &Test.p1, &Test.p2, &Test.p3, &Test.p4 );	// p1-p2-p3-p4
+	DrawFourPointCurve( &Test.p2, &Test.p3, &Test.p4, &Test.p5 );	// p2-p3-p4-p5	(p5 is the 6th point)
 
 	// swap the double-buffered framebuffers:
 	glutSwapBuffers( );
@@ -487,23 +523,33 @@ InitGraphics( )
 	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
 
-	// Read in the texture bmp file
-	int width, height;
-	Texture = BmpToTexture( (char *)"bob.bmp", &width, &height );
-	if( Texture == NULL )
-			fprintf( stderr, "Cannot open texture '%s'\n", "bob.bmp" );
-	else
-			fprintf( stderr, "Width = %d ; Height = %d\n", width, height );
+	// Initilize the curves
+	Test.r = 0.;	
+	Test.g = 1.;	
+	Test.b = 0.;
+	Test.p0.x = Test.p0.x0 = 0.;
+	Test.p0.y = Test.p0.y0 = 3.;
+	Test.p0.z = Test.p0.z0 = 0.;
 
-	// Set texture parameters
-	glPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
-	glGenTextures( 1, &WorldTex );
-	glBindTexture( GL_TEXTURE_2D, WorldTex );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexImage2D( GL_TEXTURE_2D, 0, 3, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, Texture );
+	Test.p1.x = Test.p1.x0 = 0.;
+	Test.p1.y = Test.p1.y0 = 8.;
+	Test.p1.z = Test.p1.z0 = 0.;
+
+	Test.p2.x = Test.p2.x0 = 5.;
+	Test.p2.y = Test.p2.y0 = 8.;
+	Test.p2.z = Test.p2.z0 = 0.;
+
+	Test.p3.x = Test.p3.x0 = 10.;
+	Test.p3.y = Test.p3.y0 = 10.;
+	Test.p3.z = Test.p3.z0 = 0.;
+
+	Test.p4.x = Test.p4.x0 = 5.;
+	Test.p4.y = Test.p4.y0 = 10.;
+	Test.p4.z = Test.p4.z0 = 0.;
+
+	Test.p5.x = Test.p5.x0 = 0.;
+	Test.p5.y = Test.p5.y0 = 3.;
+	Test.p5.z = Test.p5.z0 = 0.;
 
 }
 
@@ -708,6 +754,76 @@ Visibility ( int state )
 		// that the window is not visible and avoid
 		// animating or redrawing it ...
 	}
+}
+
+void
+RotateX( Point *p, float deg, float xc, float yc, float zc )
+{
+        float rad = deg * (M_PI/180.f);         // radians
+        float x = p->x0 - xc;
+        float y = p->y0 - yc;
+        float z = p->z0 - zc;
+
+        float xp = x;
+        float yp = y*cos(rad) - z*sin(rad);
+        float zp = y*sin(rad) + z*cos(rad);
+
+        p->x = xp + xc;
+        p->y = yp + yc;
+        p->z = zp + zc;
+}
+
+
+void
+RotateY( Point *p, float deg, float xc, float yc, float zc )
+{
+        float rad = deg * (M_PI/180.f);         // radians
+        float x = p->x0 - xc;
+        float y = p->y0 - yc;
+        float z = p->z0 - zc;
+
+        float xp =  x*cos(rad) + z*sin(rad);
+        float yp =  y;
+        float zp = -x*sin(rad) + z*cos(rad);
+
+        p->x = xp + xc;
+        p->y = yp + yc;
+        p->z = zp + zc;
+}
+
+
+void
+RotateZ( Point *p, float deg, float xc, float yc, float zc )
+{
+        float rad = deg * (M_PI/180.f);         // radians
+        float x = p->x0 - xc;
+        float y = p->y0 - yc;
+        float z = p->z0 - zc;
+
+        float xp = x*cos(rad) - y*sin(rad);
+        float yp = x*sin(rad) + y*cos(rad);
+        float zp = z;
+
+        p->x = xp + xc;
+        p->y = yp + yc;
+        p->z = zp + zc;
+}
+
+
+void
+DrawFourPointCurve( Point *p0, Point *p1, Point *p2, Point *p3 )
+{
+#define NUM_POINTS_IN_CURVE_DRAWING	20
+	glBegin( GL_LINE_STRIP );
+	for( int i = 0; i <= NUM_POINTS_IN_CURVE_DRAWING; i++ )
+	{
+		float t = (float)i / (float)NUM_POINTS_IN_CURVE_DRAWING;	// t goes from 0. to 1.
+		float x = 0.5f * ( 2.f * p1->x + t * (-p0->x + p2->x ) + pow(t, 2) * ( 2.f * p0->x - 5.f * p1->x + 4.f * p2->x - p3->x ) + pow(t, 3) * ( -p0->x + 3.f * p1->x - 3.f * p2->x + p3->x ) );
+		float y = 0.5f * ( 2.f * p1->y + t * ( -p0->y + p2->y ) + pow(t, 2) * ( 2.f * p0->y - 5.f * p1->y + 4.f * p2->y - p3->y ) + pow(t, 3) * ( -p0->y + 3.f * p1->y - 3.f * p2->y + p3->y ) );
+		float z = 0.5f * ( 2.f * p1->z + t * ( -p0->z + p2->z ) + pow(t, 2) * ( 2.f * p0->z - 5.f * p1->z + 4.f * p2->z - p3->z ) + pow(t, 3) * ( -p0->z + 3.f * p1->z - 3.f * p2->z + p3->z ) );
+		glVertex3f( x, y, z );
+	}
+	glEnd( );
 }
 
 
