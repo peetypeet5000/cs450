@@ -57,7 +57,7 @@ const int MIDDLE = 2;
 const int RIGHT  = 1;
 
 // Animation Parameters
-const int MS_IN_THE_ANIMATION_CYCLE = 10000;
+const int MS_IN_THE_ANIMATION_CYCLE = 1000;
 
 // which projection:
 
@@ -92,12 +92,6 @@ struct Curve6			// for a 6-point curve
         Point p0, p1, p2, p3, p4, p5;
 };
 
-struct Curve8			// for an 8-point curve
-{
-        float r, g, b;
-        Point p0, p1, p2, p3, p4, p5, p6, p7;
-};
-
 
 // non-constant global variables:
 
@@ -112,12 +106,13 @@ int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 float   Time;					// time in animation
-unsigned char * Texture;	// the texels
-unsigned int    WorldTex;	// the texture object
+int ControlPoint;				// !=0 means control points enabled
+int ControlLine;				// !=0 means control lines enabled
 
 // My curves
 
-Curve6 Test;				// one curve by itself
+Curve6 Triangle;			// The triangle curve used to build the star
+Curve6 Ribbon;				// The ribbon of the kiss
 
 // function prototypes:
 
@@ -212,9 +207,9 @@ Animate( )
 {	
 	if(!FreezeOn) {
 		int ms = glutGet( GLUT_ELAPSED_TIME );	// milliseconds
-		ms  %=  MS_IN_THE_ANIMATION_CYCLE;
+		ms = ms  %  MS_IN_THE_ANIMATION_CYCLE;
 		// Use sin function to smoothly go from 0 - 1 and back again     
-		Time = sin(M_PI * ms/MS_IN_THE_ANIMATION_CYCLE);
+		Time = ms / (float)MS_IN_THE_ANIMATION_CYCLE;
 	}
 
 	// force a call to Display( ) next time it is convenient:
@@ -288,17 +283,121 @@ Display( )
 	// since we are using glScalef( ), be sure the normals get unitized:
 	glEnable( GL_NORMALIZE );
 
-	// Draw objects
-	glPushMatrix();
-	glColor3f(1., .0, 1.);
-	glCallList(SphereList);
-	glPopMatrix();
+	// Draw body lines
+	for(int i = 0; i < 36; i++) {
+		glColor3f( Triangle.r, Triangle.g, Triangle.b );
+		RotateY( &Triangle.p0, 10. * i + (Time * 10), 0., 0., 0. );
+		RotateY( &Triangle.p1, 10. * i + (Time * 10), 0., 0., 0. );
+		RotateY( &Triangle.p2, 10. * i + (Time * 10), 0., 0., 0. );
+		RotateY( &Triangle.p3, 10. * i + (Time * 10), 0., 0., 0. );
+		RotateY( &Triangle.p4, 10. * i + (Time * 10), 0., 0., 0. );
+		RotateY( &Triangle.p5, 10. * i + (Time * 10), 0., 0., 0. );
+		DrawFourPointCurve( &Triangle.p0, &Triangle.p1, &Triangle.p2, &Triangle.p3 );	// p0-p1-p2-p3
+		DrawFourPointCurve( &Triangle.p1, &Triangle.p2, &Triangle.p3, &Triangle.p4 );	// p1-p2-p3-p4
+		DrawFourPointCurve( &Triangle.p2, &Triangle.p3, &Triangle.p4, &Triangle.p5 );	// p2-p3-p4-p5	(p5 is the 6th point)
 
-	// Draw lines
-	glColor3f( Test.r, Test.g, Test.b );
-	DrawFourPointCurve( &Test.p0, &Test.p1, &Test.p2, &Test.p3 );	// p0-p1-p2-p3
-	DrawFourPointCurve( &Test.p1, &Test.p2, &Test.p3, &Test.p4 );	// p1-p2-p3-p4
-	DrawFourPointCurve( &Test.p2, &Test.p3, &Test.p4, &Test.p5 );	// p2-p3-p4-p5	(p5 is the 6th point)
+		// Draw control points, if enabled
+		if(ControlPoint) {
+			glColor3f(1., 1., 1.);
+
+			glPushMatrix();
+			glTranslatef(Triangle.p0.x, Triangle.p0.y, Triangle.p0.z);
+			glCallList(SphereList);
+			glPopMatrix();
+
+			glPushMatrix();
+			glTranslatef(Triangle.p1.x, Triangle.p1.y, Triangle.p1.z);
+			glCallList(SphereList);
+			glPopMatrix();
+
+			glPushMatrix();
+			glTranslatef(Triangle.p2.x, Triangle.p2.y, Triangle.p2.z);
+			glCallList(SphereList);
+			glPopMatrix();
+
+			glPushMatrix();
+			glTranslatef(Triangle.p3.x, Triangle.p3.y, Triangle.p3.z);
+			glCallList(SphereList);
+			glPopMatrix();
+
+			glPushMatrix();
+			glTranslatef(Triangle.p4.x, Triangle.p4.y, Triangle.p4.z);
+			glCallList(SphereList);
+			glPopMatrix();
+
+			glPushMatrix();
+			glTranslatef(Triangle.p5.x, Triangle.p5.y, Triangle.p5.z);
+			glCallList(SphereList);
+			glPopMatrix();
+		}
+
+		// Draw control lines, if enabled
+		if(ControlLine) {
+			glColor3f(1., 1., 1.);
+
+			glBegin(GL_LINE_STRIP);
+				glVertex3f(Triangle.p0.x, Triangle.p0.y, Triangle.p0.z);
+				glVertex3f(Triangle.p1.x, Triangle.p1.y, Triangle.p1.z);
+				glVertex3f(Triangle.p2.x, Triangle.p2.y, Triangle.p2.z);
+				glVertex3f(Triangle.p3.x, Triangle.p3.y, Triangle.p3.z);
+				glVertex3f(Triangle.p4.x, Triangle.p4.y, Triangle.p4.z);
+				glVertex3f(Triangle.p5.x, Triangle.p5.y, Triangle.p5.z);
+			glEnd();
+		}
+	}
+
+	// Draw the ribbon
+	glColor3f(Ribbon.r, Ribbon.g, Ribbon.b);
+	DrawFourPointCurve( &Ribbon.p0, &Ribbon.p1, &Ribbon.p2, &Ribbon.p3 );	// p0-p1-p2-p3
+	DrawFourPointCurve( &Ribbon.p1, &Ribbon.p2, &Ribbon.p3, &Ribbon.p4 );	// p1-p2-p3-p4
+	DrawFourPointCurve( &Ribbon.p2, &Ribbon.p3, &Ribbon.p4, &Ribbon.p5 );	// p2-p3-p4-p5	(p5 is the 6th point)
+
+	if(ControlLine) {
+		glColor3f(1., 1., 1.);
+
+		glBegin(GL_LINE_STRIP);
+			glVertex3f(Ribbon.p0.x, Ribbon.p0.y, Ribbon.p0.z);
+			glVertex3f(Ribbon.p1.x, Ribbon.p1.y, Ribbon.p1.z);
+			glVertex3f(Ribbon.p2.x, Ribbon.p2.y, Ribbon.p2.z);
+			glVertex3f(Ribbon.p3.x, Ribbon.p3.y, Ribbon.p3.z);
+			glVertex3f(Ribbon.p4.x, Ribbon.p4.y, Ribbon.p4.z);
+			glVertex3f(Ribbon.p5.x, Ribbon.p5.y, Ribbon.p5.z);
+		glEnd();
+	}
+
+	if(ControlPoint) {
+		glColor3f(1., 1., 1.);
+
+		glPushMatrix();
+		glTranslatef(Ribbon.p0.x, Ribbon.p0.y, Ribbon.p0.z);
+		glCallList(SphereList);
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(Ribbon.p1.x, Ribbon.p1.y, Ribbon.p1.z);
+		glCallList(SphereList);
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(Ribbon.p2.x, Ribbon.p2.y, Ribbon.p2.z);
+		glCallList(SphereList);
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(Ribbon.p3.x, Ribbon.p3.y, Ribbon.p3.z);
+		glCallList(SphereList);
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(Ribbon.p4.x, Ribbon.p4.y, Ribbon.p4.z);
+		glCallList(SphereList);
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(Ribbon.p5.x, Ribbon.p5.y, Ribbon.p5.z);
+		glCallList(SphereList);
+		glPopMatrix();
+	}
 
 	// swap the double-buffered framebuffers:
 	glutSwapBuffers( );
@@ -523,33 +622,63 @@ InitGraphics( )
 	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
 
-	// Initilize the curves
-	Test.r = 0.;	
-	Test.g = 1.;	
-	Test.b = 0.;
-	Test.p0.x = Test.p0.x0 = 0.;
-	Test.p0.y = Test.p0.y0 = 3.;
-	Test.p0.z = Test.p0.z0 = 0.;
+	// Initilize the triangle curve
+	Triangle.r = 1.f;
+	Triangle.g = .1f;
+	Triangle.b = .2f;
+	Triangle.p0.z = Triangle.p0.z0 = 0.f;
+	Triangle.p1.z = Triangle.p1.z0 = 0.f;
+	Triangle.p2.z = Triangle.p2.z0 = 0.f;
+	Triangle.p3.z = Triangle.p3.z0 = 0.f;
+	Triangle.p4.z = Triangle.p4.z0 = 0.f;
+	Triangle.p5.z = Triangle.p5.z0 = 0.f;
 
-	Test.p1.x = Test.p1.x0 = 0.;
-	Test.p1.y = Test.p1.y0 = 8.;
-	Test.p1.z = Test.p1.z0 = 0.;
+	Triangle.p0.x = Triangle.p0.x0 = -2.;
+	Triangle.p0.y = Triangle.p0.y0 = 2.;
 
-	Test.p2.x = Test.p2.x0 = 5.;
-	Test.p2.y = Test.p2.y0 = 8.;
-	Test.p2.z = Test.p2.z0 = 0.;
+	Triangle.p1.x = Triangle.p1.x0 = 0.f;
+	Triangle.p1.y = Triangle.p1.y0 = 0.f;
 
-	Test.p3.x = Test.p3.x0 = 10.;
-	Test.p3.y = Test.p3.y0 = 10.;
-	Test.p3.z = Test.p3.z0 = 0.;
+	Triangle.p2.x = Triangle.p2.x0 = 10.;
+	Triangle.p2.y = Triangle.p2.y0 = -15.;
 
-	Test.p4.x = Test.p4.x0 = 5.;
-	Test.p4.y = Test.p4.y0 = 10.;
-	Test.p4.z = Test.p4.z0 = 0.;
+	Triangle.p3.x = Triangle.p3.x0 = -10.;
+	Triangle.p3.y = Triangle.p3.y0 = -15.;
 
-	Test.p5.x = Test.p5.x0 = 0.;
-	Test.p5.y = Test.p5.y0 = 3.;
-	Test.p5.z = Test.p5.z0 = 0.;
+	Triangle.p4.x = Triangle.p4.x0 = 0.;
+	Triangle.p4.y = Triangle.p4.y0 = 0.;
+
+	Triangle.p5.x = Triangle.p5.x0 = 2.;
+	Triangle.p5.y = Triangle.p5.y0 = 2.;
+
+	// Initilize the stem curve
+	Ribbon.r = .6f;
+	Ribbon.g = .6f;
+	Ribbon.b = .6f;
+	Ribbon.p0.z = Ribbon.p0.z0 = 0.f;
+	Ribbon.p1.z = Ribbon.p1.z0 = 0.f;
+	Ribbon.p2.z = Ribbon.p2.z0 = 0.f;
+	Ribbon.p3.z = Ribbon.p3.z0 = 0.f;
+	Ribbon.p4.z = Ribbon.p4.z0 = 0.f;
+	Ribbon.p5.z = Ribbon.p5.z0 = 0.f;
+
+	Ribbon.p0.x = Ribbon.p0.x0 = -2.;
+	Ribbon.p0.y = Ribbon.p0.y0 = -2.;
+
+	Ribbon.p1.x = Ribbon.p1.x0 = 0.f;
+	Ribbon.p1.y = Ribbon.p1.y0 = 0.f;
+
+	Ribbon.p2.x = Ribbon.p2.x0 = 2.;
+	Ribbon.p2.y = Ribbon.p2.y0 = 2.;
+
+	Ribbon.p3.x = Ribbon.p3.x0 = 2.;
+	Ribbon.p3.y = Ribbon.p3.y0 = 7.;
+
+	Ribbon.p4.x = Ribbon.p4.x0 = 4.;
+	Ribbon.p4.y = Ribbon.p4.y0 = 9.;
+
+	Ribbon.p5.x = Ribbon.p5.x0 = 6.;
+	Ribbon.p5.y = Ribbon.p5.y0 = 9.;
 
 }
 
@@ -567,7 +696,7 @@ InitLists( )
 	glPushMatrix();
 	glNewList(SphereList, GL_COMPILE);
 	glColor3f(1., 1., 1.);
-	OsuSphere(1.f, 20.f, 10.f);
+	OsuSphere(.5f, 20.f, 10.f);
 	glPopMatrix();
 
 	glEndList();
@@ -591,7 +720,12 @@ Keyboard( unsigned char c, int x, int y )
 
 		case 'p':
 		case 'P':
-			WhichProjection = PERSP;
+			ControlPoint = !ControlPoint;
+			break;
+
+		case 'l':
+		case 'L':
+			ControlLine = !ControlLine;
 			break;
 
 		case 'q':
@@ -599,6 +733,11 @@ Keyboard( unsigned char c, int x, int y )
 		case ESCAPE:
 			DoMainMenu( QUIT );	// will not return here
 			break;				// happy compiler
+
+		case 'f':
+		case 'F':
+			FreezeOn = !FreezeOn;
+			break;
 
 		default:
 			fprintf( stderr, "Don't know what to do with keyboard hit: '%c' (0x%0x)\n", c, c );
@@ -719,6 +858,8 @@ Reset( )
 	ShadowsOn = 0;
 	WhichProjection = PERSP;
 	Xrot = Yrot = 0.;
+	ControlLine = 0;
+	ControlPoint = 0;
 }
 
 
