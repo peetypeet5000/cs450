@@ -4,6 +4,7 @@
 
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <cstdlib>
 
 #ifdef WIN32
 #include <windows.h>
@@ -59,8 +60,10 @@ const int LEFT   = 4;
 const int MIDDLE = 2;
 const int RIGHT  = 1;
 
-// Animation Parameters
-const int MS_IN_THE_ANIMATION_CYCLE = 1000;
+// Simulation Parameters
+const int MAX_HUMANS = 100;
+const int INITIAL_IMMUNITY = 100;
+const int INITIAL_INFECTED = 20;
 
 // which projection:
 
@@ -78,9 +81,26 @@ enum ButtonVals
 	QUIT
 };
 
+enum HumanStates
+{
+	NONE,
+	INFECTED,
+	IMMUNE,
+	DEAD
+};
+
 // window background color (rgba):
 
 const GLfloat BACKCOLOR[ ] = { 0., 0., 0., 1. };
+float White[3] = { 1., 1., 1. };
+
+// Struct for storing sim data
+
+struct SimHuman {
+	int model;
+	float rotation;
+	HumanStates state;
+};
 
 // non-constant global variables:
 
@@ -88,19 +108,30 @@ int		ActiveButton;			// current button that is down
 int		FreezeOn;				// != 0 means to freeze the scene
 int		DebugOn;				// != 0 means to print debugging info
 GLuint	SphereList;				// Display List for OSU Sphere
-GLuint	HumanList;				// Display List for Human obj
+GLuint	Human1;					// Display List for Human obj
+GLuint	Human2;					// Display List for Human 2 obj
+GLuint	Human3;					// Display List for Human 3 obj
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
-float   Time;					// time in animation
-int 	SimSize;					// Width & Height of array for simulation
+int   	Ticks;					// time in animation
+int		TickTime;				// time for one tick
+int		LastTickTime;			// glut Time value when last tick occured
+int 	SimSize;				// Width & Height of array for simulation
+int 	Transmissibility;		// How easily the virus spreads, lower the faster
+int 	LostImmunity;			// Chance a person will lose immunity
+int 	MortailityRate;			// Likelyhood of dying after being infected
+int		InfectedTime;			// Time someone is infected (slightly randomized)
+SimHuman SimState[100][100];	// 2D Array of simulation state	
 
 // function prototypes:
 
-void	Animate( );
+void	Simulate( );
+void	TickSimulation();
 void	Display( );
+void	DrawHuman( SimHuman );
 void	DoFloatMenu( int );
 void	DoColorMenu( int );
 void	DoDepthMenu( int );
@@ -111,6 +142,7 @@ void	DoRasterString( float, float, float, char * );
 void	DoStrokeString( float, float, float, float, char * );
 float	ElapsedSeconds( );
 void	InitGraphics( );
+void	InitSimulation( );
 void	InitLists( );
 void	InitMenus( );
 void	Keyboard( unsigned char, int, int );
@@ -125,7 +157,11 @@ int				ReadInt( FILE * );
 short			ReadShort( FILE * );
 
 void			HsvRgb( float[3], float [3] );
-
+void			SetMaterial( float, float, float, float );
+void			SetPointLight( int, float, float, float,  float, float, float );
+void			SetSpotLight( int, float, float, float, float, float, float, float, float, float );
+float *			Array3( float, float, float );
+float *			MulArray3( float, float [3] );
 void			Cross(float[3], float[3], float[3]);
 float			Dot(float [3], float [3]);
 float			Unit(float [3], float [3]);
@@ -175,26 +211,95 @@ main( int argc, char *argv[ ] )
 // this is where one would put code that is to be called
 // everytime the glut main loop has nothing to do
 //
-// this is typically where animation parameters are set
-//
-// do not call Display( ) from here -- let glutPostRedisplay( ) do it
+// Every TickTime, compute new infected persons.
+// Spend the time between cycles animating the old ones
 
 void
-Animate( )
+Simulate( )
 {	
-	if(!FreezeOn) {
-		int ms = glutGet( GLUT_ELAPSED_TIME );	// milliseconds
-		ms = ms  %  MS_IN_THE_ANIMATION_CYCLE;
-		// Use sin function to smoothly go from 0 - 1 and back again     
-		Time = ms / (float)MS_IN_THE_ANIMATION_CYCLE;
+	int ms = glutGet( GLUT_ELAPSED_TIME );	// milliseconds
+	ms = ms - LastTickTime; 	// Remove time before most recent tick
+
+	if(ms > TickTime) {
+		Ticks++;
+		LastTickTime = glutGet( GLUT_ELAPSED_TIME );
+
+		// Still allow ticks to procced even if sim is frozen
+		if(!FreezeOn) {
+			TickSimulation();
+		}
 	}
 
 	// force a call to Display( ) next time it is convenient:
-
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
 }
 
+
+// Every MS_IN_SIMULATION_CYCLE, tick the underlying simulation
+// to a new state
+void
+TickSimulation() {
+	for(int i = 0; i < SimSize; i++) {
+		for(int j = 0; j < SimSize; j++) {
+
+			// Each infected person has a chance to infect the people touching them
+			// UNLESS that person is dead or immune
+			// Also, they either die or become immune after infection
+			if(SimState[i][j].state == INFECTED) {
+				// Up
+				if(j > 0) {
+					if(rand() % Transmissibility == 0) {
+						if(SimState[i][j - 1].state == NONE) {
+							SimState[i][j - 1].state = INFECTED;
+						}
+					}
+				}
+						
+				// Down
+				if(j < SimSize - 1) {
+					if(rand() % Transmissibility == 0) {
+						if(SimState[i][j + 1].state == NONE) {
+							SimState[i][j + 1].state = INFECTED;
+						}
+					}
+				}
+
+				// Left
+				if(i > 0) {
+					if(rand() % Transmissibility == 0) {
+						if(SimState[i - 1][j].state == NONE) {
+							SimState[i - 1][j].state = INFECTED;
+						}
+					}
+				}
+
+				// Right
+				if(i < SimSize - 1) {
+					if(rand() % Transmissibility == 0) {
+						if(SimState[i + 1][j].state == NONE) {
+							SimState[i + 1][j].state = INFECTED;
+						}
+					}
+				}
+
+				// Small chance of dying, medium chance of becoming immune
+				if(rand() % MortailityRate == 0) {
+					SimState[i][j].state = DEAD;
+				} else {
+					if(rand() % InfectedTime == 0)
+					SimState[i][j].state = IMMUNE;
+				}
+
+			// Have a chance of loosing immunity	
+			} else if(SimState[i][j].state == IMMUNE) {
+				if(rand() % LostImmunity == 0) {
+					SimState[i][j].state = NONE;
+				}
+			} 
+		}
+	}
+}
 
 // draw the complete scene:
 
@@ -260,30 +365,78 @@ Display( )
 	// since we are using glScalef( ), be sure the normals get unitized:
 	glEnable( GL_NORMALIZE );
 
+	// Set ambient lighting
+	glLightModelfv( GL_LIGHT_MODEL_AMBIENT, MulArray3( .3f, White ) );
+	glLightModeli ( GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE );
+	//glEnable( GL_LIGHTING );
+	glShadeModel( GL_FLAT );
+
+	// Create a point light above the scene
+	SetPointLight( GL_LIGHT0,  0.f, 200.f, 0.f,  1., 1., 1. );
+
 	glPushMatrix();
 		glScalef(.03, .03, .03);	// Make humans small
-
+		
 		// Adjust so that the center of the mass of humans is at 0,0,0
-		glTranslatef((float)SimSize / 2 * - 100.f, 0.f, (float)SimSize / 2 * - 100.f);
-
+		glTranslatef((float)SimSize / 2 * - 150.f, 0.f, (float)SimSize / 2 * - 150.f);
+		
 		// Draw 2D Display of humans
 		for(int i = 0; i < SimSize; i++) {
 			glPushMatrix();
 				for(int j = 0; j < SimSize; j++) {
-					glTranslatef(0.f, 0.f, 100.0); // Translate 100 for each y
-					glCallList(HumanList);
+					glTranslatef(0.f, 0.f, 150.0); // Translate 100 for each y
+					DrawHuman(SimState[i][j]);
 				}
 			glPopMatrix();
-			glTranslatef(100.f, 0.f, 0.f);	// Translate 100 for each x
+			glTranslatef(150.f, 0.f, 0.f);	// Translate 100 for each x
 		}				
 	glPopMatrix();
 
 	// swap the double-buffered framebuffers:
 	glutSwapBuffers( );
 
+	// Disable lighting
+	glDisable(GL_LIGHTING);
+
 	// be sure the graphics buffer has been sent:
 	// note: be sure to use glFlush( ) here, not glFinish( ) !
 	glFlush( );
+}
+
+
+// Draw the correcct human model based on the simulation paramter
+void 
+DrawHuman(SimHuman human) {
+	glPushMatrix();
+
+	// Apply rotation variance
+	glRotatef(human.rotation, 0.f, 1.f, 0.f);
+
+	// Change color based on infected status
+	if(human.state == DEAD) {
+		glColor3f(.3f, 0.f, 0.f);
+	} else if(human.state == INFECTED) {
+		glColor3f(1.f, .2f, .2f);
+	} else if(human.state == IMMUNE) {
+		glColor3f(.6f, .7f, .4f);
+	} else {
+		glColor3f(1.f, 1.f, 1.f);
+	}
+
+	switch (human.model) {
+		case 0:
+			glCallList(Human1);
+			break;
+		case 1:	
+			glCallList(Human2);
+			break;
+
+		case 2:
+			glCallList(Human3);
+			break;
+	}
+
+	glPopMatrix();
 }
 
 
@@ -340,6 +493,55 @@ void
 DoSizeMenu( int id )
 {
 	SimSize = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+void
+DoTransmisMenu( int id )
+{
+	Transmissibility = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+void
+DoTimeMenu( int id )
+{
+	InfectedTime = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+void
+DoMortailityMenu( int id )
+{
+	MortailityRate = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+void
+DoRetransmissionMenu( int id )
+{
+	LostImmunity = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+void
+DoSpeedMenu( int id )
+{
+	TickTime = id;
 
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
@@ -414,11 +616,45 @@ InitMenus( )
 	glutAddMenuEntry( "50",   50 );
 	glutAddMenuEntry( "100",   100 );
 
+	int mortalitymenu = glutCreateMenu( DoMortailityMenu );
+	glutAddMenuEntry( "Less", 6);
+	glutAddMenuEntry( "Standard", 5);
+	glutAddMenuEntry( "More", 4);
+	glutAddMenuEntry( "Max", 3);
+
+	int transmismenu = glutCreateMenu( DoTransmisMenu );
+	glutAddMenuEntry( "Less", 4);
+	glutAddMenuEntry( "Standard", 3);
+	glutAddMenuEntry( "More", 2);
+	glutAddMenuEntry( "Max", 1);
+
+	int retransmissionmenu = glutCreateMenu( DoRetransmissionMenu );
+	glutAddMenuEntry( "Low", 25);
+	glutAddMenuEntry( "Standard", 20);
+	glutAddMenuEntry( "High", 15);
+	glutAddMenuEntry( "Max", 10);
+
+	int timemenu = glutCreateMenu( DoTimeMenu );
+	glutAddMenuEntry( "Short", 1);
+	glutAddMenuEntry( "Standard", 3);
+	glutAddMenuEntry( "Long", 5);
+	glutAddMenuEntry( "Longest", 10);
+
+	int speedmenu = glutCreateMenu( DoSpeedMenu );
+	glutAddMenuEntry( "Faster", 1000);
+	glutAddMenuEntry( "Standard", 3000);
+	glutAddMenuEntry( "Slower", 5000);
+
 	int mainmenu = glutCreateMenu( DoMainMenu );
 	glutAddSubMenu(   "Freeze",        freezemenu);
 	glutAddSubMenu(   "Projection",    projmenu );
 	glutAddSubMenu(	  "Size",		   sizemenu);
-	glutAddMenuEntry( "Reset",         RESET );
+	glutAddSubMenu(	  "Transmissability",  transmismenu);
+	glutAddSubMenu(   "Infected Time",  timemenu );
+	glutAddSubMenu(	  "Waning Immunity",  retransmissionmenu);
+	glutAddSubMenu(	  "Mortaility",		   mortalitymenu);
+	glutAddSubMenu(   "Simulation Speed",  speedmenu );
+	glutAddMenuEntry( "Reset",		   RESET);
 	glutAddMenuEntry( "Quit",          QUIT );
 
 // attach the pop-up menu to the right mouse button:
@@ -495,12 +731,12 @@ InitGraphics( )
 	glutMenuStateFunc( NULL );
 	glutTimerFunc( -1, NULL, 0 );
 
-	// setup glut to call Animate( ) every time it has
+	// setup glut to call Simulate( ) every time it has
 	// 	nothing it needs to respond to (which is most of the time)
 	// we don't need to do this for this program, and really should set the argument to NULL
 	// but, this sets us up nicely for doing animation
 
-	glutIdleFunc( Animate );
+	glutIdleFunc( Simulate );
 
 	// init the glew package (a window must be open to do this):
 
@@ -515,6 +751,46 @@ InitGraphics( )
 	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
 
+	// Seed rand function
+	srand(time(NULL));
+
+	// Set some initial values
+	ActiveButton = 0;
+	Scale  = 1.0;
+	WhichProjection = PERSP;
+	Xrot = Yrot = 0.;
+	FreezeOn = 0;
+	SimSize = 25;
+	Transmissibility = 3;
+	MortailityRate = 5;
+	LostImmunity = 20;
+	InfectedTime = 3;
+	TickTime = 3000;
+	InfectedTime = 3;
+
+	InitSimulation();
+
+}
+
+
+// Set initial model and rotation for all simulated humans
+void
+InitSimulation( ) {
+	for(int i = 0; i < MAX_HUMANS; i++) {
+		for(int j = 0; j < MAX_HUMANS; j++) {
+			SimState[i][j].model = rand() % 3;			// Random number 0 - 2
+			SimState[i][j].rotation = rand() % 361;		// Random number 0 - 90
+
+			// Random chance some humans into infection and immunity
+			if(rand() % INITIAL_INFECTED == 0) {
+				SimState[i][j].state = INFECTED;
+			} else if (rand() % INITIAL_IMMUNITY == 0) {
+				SimState[i][j].state = IMMUNE;
+			} else {
+				SimState[i][j].state = NONE;
+			}
+		}
+	}
 }
 
 
@@ -536,12 +812,26 @@ InitLists( )
 
 	glEndList();
 
-	// Create the display list for the human from the obj file
-	HumanList = glGenLists( 1 );
-	glNewList( HumanList, GL_COMPILE );
+	// Create the display list for the humans from the obj files
+	Human1 = glGenLists( 1 );
+	glNewList( Human1, GL_COMPILE );
+	LoadObjFile( "low_poly_male.obj" );
+	glEndList( );
 
-	LoadObjFile( "human.obj" );
-	
+	Human2 = glGenLists( 1 );
+	glNewList( Human2, GL_COMPILE );
+	glPushMatrix();
+	glScalef(35.f, 35.f, 35.f);
+	LoadObjFile( "low_poly_male_2.obj" );
+	glPopMatrix();
+	glEndList( );
+
+	Human3 = glGenLists( 1 );
+	glNewList( Human3, GL_COMPILE );
+	glPushMatrix();
+	glScalef(1.5f, 1.5f, 1.5f);
+	LoadObjFile( "low_poly_male_3.obj" );
+	glPopMatrix();
 	glEndList( );
 }
 
@@ -570,6 +860,11 @@ Keyboard( unsigned char c, int x, int y )
 		case 'f':
 		case 'F':
 			FreezeOn = !FreezeOn;
+			break;
+
+		case 'r':
+		case 'R':
+			Reset();
 			break;
 
 		default:
@@ -684,13 +979,8 @@ MouseMotion( int x, int y )
 void
 Reset( )
 {
-	ActiveButton = 0;
-	FreezeOn = 0;
-	DebugOn = 0;
-	Scale  = 1.0;
-	WhichProjection = PERSP;
-	Xrot = Yrot = 0.;
-	SimSize= 25;
+	// Reset the simulation
+	InitSimulation();
 }
 
 
@@ -1067,4 +1357,76 @@ HsvRgb( float hsv[3], float rgb[3] )
 	rgb[0] = r;
 	rgb[1] = g;
 	rgb[2] = b;
+}
+
+void
+SetMaterial( float r, float g, float b,  float shininess )
+{
+	glMaterialfv( GL_BACK, GL_EMISSION, Array3( 0., 0., 0. ) );
+	glMaterialfv( GL_BACK, GL_AMBIENT, MulArray3( .4f, White ) );
+	glMaterialfv( GL_BACK, GL_DIFFUSE, MulArray3( 1., White ) );
+	glMaterialfv( GL_BACK, GL_SPECULAR, Array3( 0., 0., 0. ) );
+	glMaterialf ( GL_BACK, GL_SHININESS, 5.f );
+
+	glMaterialfv( GL_FRONT, GL_EMISSION, Array3( 0., 0., 0. ) );
+	glMaterialfv( GL_FRONT, GL_AMBIENT, Array3( r, g, b ) );
+	glMaterialfv( GL_FRONT, GL_DIFFUSE, Array3( r, g, b ) );
+	glMaterialfv( GL_FRONT, GL_SPECULAR, MulArray3( .8f, White ) );
+	glMaterialf ( GL_FRONT, GL_SHININESS, shininess );
+}
+
+
+void
+SetPointLight( int ilight, float x, float y, float z,  float r, float g, float b )
+{
+	glLightfv( ilight, GL_POSITION,  Array3( x, y, z ) );
+	glLightfv( ilight, GL_AMBIENT,   Array3( 0., 0., 0. ) );
+	glLightfv( ilight, GL_DIFFUSE,   Array3( r, g, b ) );
+	glLightfv( ilight, GL_SPECULAR,  Array3( r, g, b ) );
+	glLightf ( ilight, GL_CONSTANT_ATTENUATION, 1.f );
+	glLightf ( ilight, GL_LINEAR_ATTENUATION, 0. );
+	glLightf ( ilight, GL_QUADRATIC_ATTENUATION, 0. );
+	glEnable( ilight );
+}
+
+
+void
+SetSpotLight( int ilight, float x, float y, float z, float xdir, float ydir, float zdir, float r, float g, float b )
+{
+	glLightfv( ilight, GL_POSITION,  Array3( x, y, z ) );
+	glLightfv( ilight, GL_SPOT_DIRECTION,  Array3(xdir,ydir,zdir) );
+	glLightf(  ilight, GL_SPOT_EXPONENT, 1. );
+	glLightf(  ilight, GL_SPOT_CUTOFF, 45. );
+	glLightfv( ilight, GL_AMBIENT,   Array3( 0., 0., 0. ) );
+	glLightfv( ilight, GL_DIFFUSE,   Array3( r, g, b ) );
+	glLightfv( ilight, GL_SPECULAR,  Array3( r, g, b ) );
+	glLightf ( ilight, GL_CONSTANT_ATTENUATION, 1. );
+	glLightf ( ilight, GL_LINEAR_ATTENUATION, 0. );
+	glLightf ( ilight, GL_QUADRATIC_ATTENUATION, 0. );
+	glEnable( ilight );
+}
+
+
+float *
+Array3( float a, float b, float c )
+{
+	static float array[4];
+	
+	array[0] = a;
+	array[1] = b;
+	array[2] = c;
+	array[3] = 1.;
+	return array;
+}
+
+float *
+MulArray3( float factor, float array0[3] )
+{
+        static float array[4];
+
+        array[0] = factor * array0[0];
+        array[1] = factor * array0[1];
+        array[2] = factor * array0[2];
+        array[3] = 1.;
+        return array;
 }
